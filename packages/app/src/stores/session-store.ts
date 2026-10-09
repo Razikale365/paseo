@@ -2,7 +2,7 @@ import equal from "fast-deep-equal";
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
-import type { ViewedTimelineUiBridge } from "@/timeline/viewed-timeline-sync";
+import type { ViewedTimelineOwner } from "@/timeline/viewed-timeline-sync";
 import type { AgentDirectoryEntry } from "@/types/agent-directory";
 import {
   appendSubmittedUserMessage,
@@ -113,6 +113,7 @@ export interface WorkspaceDescriptor {
   worktreeSlug?: WorkspaceDescriptorPayload["worktreeSlug"];
   projectKind: WorkspaceDescriptorPayload["projectKind"];
   workspaceKind: WorkspaceDescriptorPayload["workspaceKind"];
+  background?: boolean;
   name: string;
   title?: string | null;
   pinnedAt?: string | null;
@@ -150,6 +151,7 @@ export function normalizeWorkspaceDescriptor(
     worktreeSlug: payload.worktreeSlug,
     projectKind: payload.projectKind,
     workspaceKind: payload.workspaceKind,
+    background: payload.background ?? false,
     name: payload.name,
     title: payload.title ?? null,
     pinnedAt: payload.pinnedAt ?? null,
@@ -285,6 +287,19 @@ export interface DaemonServerInfo {
   features?: ServerInfoStatusPayload["features"];
 }
 
+export function toDaemonServerInfo(serverInfo: ServerInfoStatusPayload): DaemonServerInfo {
+  return {
+    serverId: serverInfo.serverId,
+    hostname: serverInfo.hostname ?? null,
+    version: serverInfo.version ?? null,
+    ...(serverInfo.desktopManaged !== undefined
+      ? { desktopManaged: serverInfo.desktopManaged }
+      : {}),
+    ...(serverInfo.capabilities ? { capabilities: serverInfo.capabilities } : {}),
+    ...(serverInfo.features ? { features: serverInfo.features } : {}),
+  };
+}
+
 export interface AgentTimelineCursorState {
   epoch: string;
   startSeq: number;
@@ -366,7 +381,7 @@ export interface SessionState {
   // Daemon client (immutable reference)
   client: DaemonClient | null;
   clientGeneration: number;
-  viewedTimelineSync: ViewedTimelineUiBridge | null;
+  viewedTimelineSync: ViewedTimelineOwner | null;
 
   // Server metadata (from server_info handshake)
   serverInfo: DaemonServerInfo | null;
@@ -442,7 +457,7 @@ interface SessionStoreActions {
   clearSession: (serverId: string) => void;
   getSession: (serverId: string) => SessionState | undefined;
   updateSessionClient: (serverId: string, client: DaemonClient, clientGeneration?: number) => void;
-  setViewedTimelineSync: (serverId: string, sync: ViewedTimelineUiBridge | null) => void;
+  setViewedTimelineSync: (serverId: string, sync: ViewedTimelineOwner | null) => void;
   updateSessionServerInfo: (serverId: string, info: DaemonServerInfo) => void;
 
   // Audio state

@@ -210,6 +210,70 @@ describe("Claude terminal agent hooks", () => {
     expect(registeredAgentHooksAreInstalled({ configDir })).toBe(false);
   });
 
+  it("detects and replaces marked encoded hooks after the wrapper payload changes", () => {
+    const provider = AGENT_HOOK_PROVIDERS.claude;
+    const prefix = "powershell.exe -NoProfile -NonInteractive -EncodedCommand ";
+    const oldCommand = `${prefix}${Buffer.from(
+      `# Paseo managed hook: ${provider.install.hookMarker}\nexit 0`,
+      "utf16le",
+    ).toString("base64")}`;
+    const settings = {
+      hooks: Object.fromEntries(
+        provider.events.map(({ event }) => [
+          event,
+          [
+            {
+              matcher: "",
+              hooks: [{ type: "command", command: oldCommand }],
+            },
+          ],
+        ]),
+      ),
+    };
+
+    expect(provider.install.format.isInstalled(settings, provider)).toBe(true);
+    const installed = provider.install.format.install(settings, provider);
+    for (const { event } of provider.events) {
+      expect(hookCommands(installed, event)).toHaveLength(1);
+      expect(hookCommands(installed, event)).not.toContain(oldCommand);
+    }
+    expect(provider.install.format.uninstall(settings, provider).hooks).toEqual({});
+  });
+
+  it("uninstalls the original unmarked encoded wrapper", () => {
+    const provider = AGENT_HOOK_PROVIDERS.claude;
+    const prefix = "powershell.exe -NoProfile -NonInteractive -EncodedCommand ";
+    const command = buildAgentHookWindowsPowerShellCommand(provider, claudeEvent("Stop"));
+    const script = Buffer.from(command.slice(prefix.length), "base64").toString("utf16le");
+    const originalCommand = `${prefix}${Buffer.from(script.split("\n").slice(1).join("\n"), "utf16le").toString("base64")}`;
+    const settings = {
+      hooks: { Stop: [{ matcher: "", hooks: [{ type: "command", command: originalCommand }] }] },
+    };
+    expect(provider.install.format.uninstall(settings, provider).hooks).toEqual({});
+    const installed = provider.install.format.install(settings, provider);
+    expect(hookCommands(installed, "Stop")).toHaveLength(1);
+    expect(hookCommands(installed, "Stop")).not.toContain(originalCommand);
+  });
+
+  it("preserves encoded user hooks and malformed encoded commands", () => {
+    const provider = AGENT_HOOK_PROVIDERS.claude;
+    const prefix = "powershell.exe -NoProfile -NonInteractive -EncodedCommand ";
+    const commands = [
+      `${prefix}${Buffer.from("Write-Output 'hooks claude'", "utf16le").toString("base64")}`,
+      `${prefix}not-valid-base64!`,
+      `echo ${prefix}${Buffer.from("# Paseo managed hook: hooks claude\nexit 0", "utf16le").toString("base64")}`,
+    ];
+    const settings = {
+      hooks: {
+        Stop: [{ matcher: "", hooks: commands.map((command) => ({ type: "command", command })) }],
+      },
+    };
+    const uninstalled = provider.install.format.uninstall(settings, provider);
+    expect(hookCommands(uninstalled, "Stop")).toEqual(commands);
+    const installed = provider.install.format.install(settings, provider);
+    expect(hookCommands(installed, "Stop").slice(0, commands.length)).toEqual(commands);
+  });
+
   it("builds a minimal gated hook command", () => {
     const provider = AGENT_HOOK_PROVIDERS.claude;
     const command = buildAgentHookShellCommand(provider, provider.events[0]);
@@ -227,6 +291,7 @@ describe("Claude terminal agent hooks", () => {
     expect(command.startsWith(prefix)).toBe(true);
     expect(Buffer.from(command.slice(prefix.length), "base64").toString("utf16le")).toBe(
       [
+        "# Paseo managed hook: hooks claude",
         "if ([string]::IsNullOrEmpty($env:PASEO_TERMINAL_ID)) { exit 0 }",
         "$cli = $env:PASEO_HOOK_CLI",
         "if ([string]::IsNullOrEmpty($cli)) { $cli = 'paseo' }",

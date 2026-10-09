@@ -51,7 +51,7 @@ Claude hook mapping:
 
 - `UserPromptSubmit` → `running`
 - `Stop`, `StopFailure`, `SessionEnd` → `idle`
-- `Notification` with `reason` or `matcher` equal to `idle_prompt` → `needs-input`
+- `Notification` with `notification_type` equal to `idle_prompt` → `needs-input`
 
 Claude does not run `Stop` when the user interrupts a turn. A standalone Ctrl-C or Escape input
 while terminal activity is working clears the activity without finished attention. The same
@@ -102,7 +102,7 @@ When enabled, Paseo installs provider hooks globally:
 - Codex hooks are written to `~/.codex/hooks.json` (or `CODEX_HOME/hooks.json` when that override is set). Codex supports a native `commandWindows`, so each Paseo hook includes both POSIX and Windows commands. Non-managed Codex hooks are trust-gated by Codex; users may see Codex's hook review prompt before the hook runs.
 - OpenCode gets a self-contained plugin at `$XDG_CONFIG_HOME/opencode/plugins/paseo-terminal-activity.js` (or `~/.config/opencode/plugins/paseo-terminal-activity.js` when XDG is unset; `OPENCODE_CONFIG_DIR` still wins when set).
 
-Installation is marker-based/idempotent for config hooks and exact-file/idempotent for the OpenCode plugin. Encoded Windows commands are matched against the exact command Paseo generates because their marker is not visible. Paseo preserves user hooks, removes only its own command hooks, and leaves hooks installed across daemon shutdown. Outside a Paseo terminal they are inert because the command or plugin is gated on `PASEO_TERMINAL_ID`.
+Installation is marker-based/idempotent for config hooks and exact-file/idempotent for the OpenCode plugin. Encoded Windows commands carry a decoded ownership marker so wrapper updates do not orphan installed hooks; the original unmarked wrapper remains recognized. Paseo preserves user hooks, removes only its own command hooks, and leaves hooks installed across daemon shutdown. Outside a Paseo terminal they are inert because the command or plugin is gated on `PASEO_TERMINAL_ID`.
 
 Provider variation lives in `AGENT_HOOK_PROVIDERS`: provider id, installed events, config install metadata, and runtime event-to-activity resolution. The daemon calls `installRegisteredAgentHooks()` once; the CLI calls `resolveHookActivity(provider, event, input)`. Adding a provider should add one provider entry and register it in `AGENT_HOOK_PROVIDERS`, without editing the generic CLI command or daemon bootstrap.
 

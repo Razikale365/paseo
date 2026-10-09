@@ -155,6 +155,7 @@ export function buildAgentHookWindowsPowerShellCommand<TConfig>(
 ): string {
   const hookArgs = `${powerShellString(provider.id)} ${powerShellString(event.event)}`;
   const script = [
+    `# Paseo managed hook: ${provider.install.hookMarker}`,
     "if ([string]::IsNullOrEmpty($env:PASEO_TERMINAL_ID)) { exit 0 }",
     "$cli = $env:PASEO_HOOK_CLI",
     "if ([string]::IsNullOrEmpty($cli)) { $cli = 'paseo' }",
