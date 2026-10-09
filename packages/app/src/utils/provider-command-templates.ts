@@ -19,6 +19,7 @@ export interface BuildProviderCommandInput extends ResolveProviderCommandTemplat
 
 export interface ResolveProviderResumeCommandInput {
   provider: string;
+  defaultResumeProvider?: string;
   sessionId: string;
   supportsProviderAncestry: boolean;
   getProviderSnapshot: () => Promise<readonly ResumeSnapshot[] | undefined>;
@@ -109,34 +110,27 @@ export function buildProviderCommand(input: BuildProviderCommandInput): string |
   return renderTemplate(template, { sessionId: input.sessionId });
 }
 
-/**
- * Resolve the resume command for a provider.
- *
- * Built-in resume templates are existing functionality: without the
- * `providerAncestry` capability, resolve them locally and never issue a
- * snapshot RPC. Only ancestry-based inherited custom-provider resolution is
- * gated on the capability. Daemons advertising `providerAncestry` provide the
- * authoritative safety classification through their snapshot. If the command
- * is not available, the returned promise rejects with
- * {@link ProviderResumeCommandUnavailableError}.
- */
+/** Existing built-in commands resolve locally. Inheritance needs current safety and launch provenance. */
 export async function resolveProviderResumeCommand(
   input: ResolveProviderResumeCommandInput,
 ): Promise<string> {
-  if (!input.supportsProviderAncestry) {
-    const localCommand = buildProviderCommand({
-      provider: input.provider,
-      id: "resume",
-      sessionId: input.sessionId,
-    });
-    if (!localCommand) {
-      throw new ProviderResumeCommandUnavailableError();
-    }
-    return localCommand;
+  // Existing built-in actions remain local, including ACP-backed Hermes.
+  const localCommand = buildProviderCommand({
+    provider: input.provider,
+    id: "resume",
+    sessionId: input.sessionId,
+  });
+  if (localCommand) return localCommand;
+  if (!input.supportsProviderAncestry || !input.defaultResumeProvider) {
+    throw new ProviderResumeCommandUnavailableError();
   }
 
   const providerSnapshot = await input.getProviderSnapshot();
   if (!providerSnapshot) {
+    throw new ProviderResumeCommandUnavailableError();
+  }
+  const entry = providerSnapshot.find((candidate) => candidate.provider === input.provider);
+  if (entry?.derivedFromProviderId !== input.defaultResumeProvider) {
     throw new ProviderResumeCommandUnavailableError();
   }
   const command = buildProviderCommand({

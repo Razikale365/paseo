@@ -16,7 +16,7 @@ const SERIALIZABLE_CONFIG_SCHEMA = z
     model: z.string().nullable().optional(),
     thinkingOptionId: z.string().nullable().optional(),
     featureValues: z.record(z.string(), z.unknown()).nullable().optional(),
-    providerOptions: z.record(z.string(), z.json()).nullable().optional(),
+    providerOptions: z.record(z.string(), z.unknown()).nullable().optional(),
     toolPolicy: z
       .object({
         preapproved: z.array(
@@ -44,6 +44,7 @@ const PERSISTENCE_HANDLE_SCHEMA = z
 
 const STORED_AGENT_SCHEMA = z.object({
   id: z.string(),
+  defaultResumeProvider: z.string().optional(),
   provider: z.string(),
   cwd: z.string(),
   workspaceId: z.string().optional(),

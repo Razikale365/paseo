@@ -172,6 +172,42 @@ describe("buildProviderCommand", () => {
 });
 
 describe("resolveProviderResumeCommand", () => {
+  test.each([
+    ["claude", "claude --resume example-session"],
+    ["codex", "codex resume example-session"],
+    ["hermes", "hermes --resume example-session"],
+    ["pi", "pi --session example-session"],
+    ["omp", "omp --session example-session"],
+    ["opencode", "opencode --session example-session"],
+  ])(
+    "keeps existing %s resume commands independent of ancestry RPCs",
+    async (provider, command) => {
+      await expect(
+        resolveProviderResumeCommand({
+          provider,
+          sessionId: "example-session",
+          supportsProviderAncestry: true,
+          getProviderSnapshot: neverCalledSnapshot,
+        }),
+      ).resolves.toBe(command);
+    },
+  );
+
+  test.each([undefined, "claude"])(
+    "rejects inherited resume without matching launch provenance (%s)",
+    async (defaultResumeProvider) => {
+      await expect(
+        resolveProviderResumeCommand({
+          provider: "my-codex",
+          sessionId: "example-session",
+          supportsProviderAncestry: true,
+          defaultResumeProvider,
+          getProviderSnapshot: () => Promise.resolve([snapshotEntry("my-codex", "codex", true)]),
+        }),
+      ).rejects.toThrow(ProviderResumeCommandUnavailableError);
+    },
+  );
+
   test("resolves built-in Codex locally when providerAncestry is not advertised", async () => {
     await expect(
       resolveProviderResumeCommand({
@@ -205,54 +241,11 @@ describe("resolveProviderResumeCommand", () => {
     ).resolves.toBe("hermes --resume 20260813_111500_abc123");
   });
 
-  test("keeps Hermes unavailable on current daemons when the snapshot reports an ACP transport launcher", async () => {
-    await expect(
-      resolveProviderResumeCommand({
-        provider: "hermes",
-        sessionId: "20260813_111500_abc123",
-        supportsProviderAncestry: true,
-        getProviderSnapshot: () => Promise.resolve([snapshotEntry("hermes", null, false)]),
-      }),
-    ).rejects.toThrow(ProviderResumeCommandUnavailableError);
-  });
-
-  test("resolves built-in Codex from the authoritative snapshot when providerAncestry is advertised", async () => {
-    await expect(
-      resolveProviderResumeCommand({
-        provider: "codex",
-        sessionId: "example-session",
-        supportsProviderAncestry: true,
-        getProviderSnapshot: () => Promise.resolve([snapshotEntry("codex", null, true)]),
-      }),
-    ).resolves.toBe("codex resume example-session");
-  });
-
-  test("rejects a customized built-in provider when providerAncestry is advertised", async () => {
-    await expect(
-      resolveProviderResumeCommand({
-        provider: "codex",
-        sessionId: "example-session",
-        supportsProviderAncestry: true,
-        getProviderSnapshot: () => Promise.resolve([snapshotEntry("codex", null, false)]),
-      }),
-    ).rejects.toThrow(ProviderResumeCommandUnavailableError);
-  });
-
-  test("rejects a built-in provider when the authoritative snapshot is unavailable", async () => {
-    await expect(
-      resolveProviderResumeCommand({
-        provider: "codex",
-        sessionId: "example-session",
-        supportsProviderAncestry: true,
-        getProviderSnapshot: () => Promise.resolve(undefined),
-      }),
-    ).rejects.toThrow(ProviderResumeCommandUnavailableError);
-  });
-
   test("rejects a custom provider when providerAncestry is not advertised", async () => {
     await expect(
       resolveProviderResumeCommand({
         provider: "my-codex",
+        defaultResumeProvider: "codex",
         sessionId: "example-session",
         supportsProviderAncestry: false,
         getProviderSnapshot: neverCalledSnapshot,
@@ -264,6 +257,7 @@ describe("resolveProviderResumeCommand", () => {
     await expect(
       resolveProviderResumeCommand({
         provider: "my-codex",
+        defaultResumeProvider: "codex",
         sessionId: "example-session",
         supportsProviderAncestry: true,
         getProviderSnapshot: () => Promise.resolve([snapshotEntry("my-codex", "codex", true)]),
@@ -275,6 +269,7 @@ describe("resolveProviderResumeCommand", () => {
     await expect(
       resolveProviderResumeCommand({
         provider: "my-codex",
+        defaultResumeProvider: "codex",
         sessionId: "example-session",
         supportsProviderAncestry: true,
         getProviderSnapshot: () => Promise.resolve([snapshotEntry("my-codex", "codex", false)]),
@@ -286,6 +281,7 @@ describe("resolveProviderResumeCommand", () => {
     await expect(
       resolveProviderResumeCommand({
         provider: "my-codex",
+        defaultResumeProvider: "codex",
         sessionId: "example-session",
         supportsProviderAncestry: true,
         getProviderSnapshot: () => Promise.resolve([snapshotEntry("my-codex", "codex", false)]),
@@ -297,6 +293,7 @@ describe("resolveProviderResumeCommand", () => {
     await expect(
       resolveProviderResumeCommand({
         provider: "my-codex",
+        defaultResumeProvider: "codex",
         sessionId: "example-session",
         supportsProviderAncestry: true,
         getProviderSnapshot: () =>
@@ -311,6 +308,7 @@ describe("resolveProviderResumeCommand", () => {
     await expect(
       resolveProviderResumeCommand({
         provider: "my-codex",
+        defaultResumeProvider: "codex",
         sessionId: "example-session",
         supportsProviderAncestry: true,
         getProviderSnapshot: () => Promise.resolve(undefined),
@@ -322,6 +320,7 @@ describe("resolveProviderResumeCommand", () => {
     await expect(
       resolveProviderResumeCommand({
         provider: "my-codex",
+        defaultResumeProvider: "codex",
         sessionId: "example-session",
         supportsProviderAncestry: true,
         getProviderSnapshot: () => Promise.reject(new Error("network failure")),
@@ -335,6 +334,7 @@ describe("resolveProviderResumeCommandOutcome", () => {
     await expect(
       resolveProviderResumeCommandOutcome({
         provider: "my-codex",
+        defaultResumeProvider: "codex",
         sessionId: "example-session",
         supportsProviderAncestry: false,
         getProviderSnapshot: neverCalledSnapshot,
@@ -348,6 +348,7 @@ describe("resolveProviderResumeCommandOutcome", () => {
     await expect(
       resolveProviderResumeCommandOutcome({
         provider: "my-codex",
+        defaultResumeProvider: "codex",
         sessionId: "example-session",
         supportsProviderAncestry: true,
         getProviderSnapshot: () => Promise.reject(snapshotError),
